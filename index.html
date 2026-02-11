@@ -1,0 +1,538 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>云端天宫 CloudTower 3D</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { overflow: hidden; background: linear-gradient(to bottom, #87CEEB 0%, #E0F6FF 50%, #F0F8FF 100%); }
+        #canvas-container { width: 100vw; height: 100vh; }
+        #info {
+            position: absolute; top: 10px; left: 10px;
+            background: rgba(255,255,255,0.9); padding: 15px; border-radius: 10px;
+            font-family: 'Microsoft YaHei', sans-serif; font-size: 14px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+            max-width: 300px;
+        }
+        #info h1 { color: #2E8B57; font-size: 20px; margin-bottom: 10px; }
+        #info .zone { color: #666; margin: 5px 0; padding: 5px; background: #f5f5f5; border-radius: 5px; }
+        .loading {
+            position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+            font-size: 24px; color: #2E8B57; font-family: 'Microsoft YaHei', sans-serif;
+        }
+    </style>
+    <script type="importmap">
+    {
+        "imports": {
+            "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+            "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+        }
+    }
+    </script>
+</head>
+<body>
+    <div id="canvas-container"></div>
+    <div id="info">
+        <h1>🏯 云端天宫</h1>
+        <p>CloudTower - 云端运维可视化</p>
+        <div class="zone">🎯 ZONE 2: 可观测性平台</div>
+        <div class="zone">🔍 ZONE 3: 全局搜索</div>
+        <div class="zone">📋 ZONE 4: 任务中心</div>
+        <p style="margin-top: 10px; font-size: 12px; color: #999;">
+            鼠标拖拽旋转 | 滚轮缩放 | 点击建筑查看详情
+        </p>
+    </div>
+    <div class="loading" id="loading">正在构建天宫...</div>
+
+    <script type="module">
+        import * as THREE from 'three';
+        import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+        import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
+        import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
+        import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
+
+        // 场景初始化
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0x87CEEB);
+        scene.fog = new THREE.FogExp2(0xE0F6FF, 0.008);
+
+        const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000);
+        camera.position.set(0, 30, 60);
+
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.setPixelRatio(window.devicePixelRatio);
+        renderer.shadowMap.enabled = true;
+        renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+        document.getElementById('canvas-container').appendChild(renderer.domElement);
+
+        // 后处理 - Bloom 效果
+        const composer = new EffectComposer(renderer);
+        const renderPass = new RenderPass(scene, camera);
+        composer.addPass(renderPass);
+
+        const bloomPass = new UnrealBloomPass(
+            new THREE.Vector2(window.innerWidth, window.innerHeight),
+            0.5, 0.4, 0.85
+        );
+        composer.addPass(bloomPass);
+
+        // 控制器
+        const controls = new OrbitControls(camera, renderer.domElement);
+        controls.enableDamping = true;
+        controls.dampingFactor = 0.05;
+        controls.maxPolarAngle = Math.PI / 2 - 0.1;
+        controls.minDistance = 20;
+        controls.maxDistance = 150;
+
+        // 材质定义
+        const jadeMaterial = new THREE.MeshPhysicalMaterial({
+            color: 0x2E8B57,
+            metalness: 0.1,
+            roughness: 0.2,
+            transmission: 0.3,
+            thickness: 1,
+            clearcoat: 1,
+            clearcoatRoughness: 0.1
+        });
+
+        const goldMaterial = new THREE.MeshStandardMaterial({
+            color: 0xFFD700,
+            metalness: 0.9,
+            roughness: 0.2
+        });
+
+        const roofMaterial = new THREE.MeshStandardMaterial({
+            color: 0xDAA520,
+            metalness: 0.6,
+            roughness: 0.4
+        });
+
+        const crystalMaterial = new THREE.MeshPhysicalMaterial({
+            color: 0x00CED1,
+            metalness: 0.1,
+            roughness: 0,
+            transmission: 0.9,
+            thickness: 2,
+            emissive: 0x00CED1,
+            emissiveIntensity: 0.3
+        });
+
+        const cloudMaterial = new THREE.MeshLambertMaterial({
+            color: 0xFFFFFF,
+            transparent: true,
+            opacity: 0.8
+        });
+
+        // 光照系统
+        const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+        scene.add(ambientLight);
+
+        const sunLight = new THREE.DirectionalLight(0xFFFACD, 1.2);
+        sunLight.position.set(50, 100, 50);
+        sunLight.castShadow = true;
+        sunLight.shadow.mapSize.width = 2048;
+        sunLight.shadow.mapSize.height = 2048;
+        scene.add(sunLight);
+
+        const pointLight = new THREE.PointLight(0xFFD700, 1, 100);
+        pointLight.position.set(0, 20, 0);
+        scene.add(pointLight);
+
+        // 创建云朵平台
+        function createCloudPlatform(x, y, z, scale = 1) {
+            const group = new THREE.Group();
+            
+            const mainCloud = new THREE.Mesh(
+                new THREE.SphereGeometry(10 * scale, 32, 32),
+                cloudMaterial
+            );
+            mainCloud.scale.y = 0.3;
+            mainCloud.position.y = -2;
+            group.add(mainCloud);
+
+            // 添加多个小云朵
+            for (let i = 0; i < 5; i++) {
+                const smallCloud = new THREE.Mesh(
+                    new THREE.SphereGeometry(3 * scale, 16, 16),
+                    cloudMaterial
+                );
+                smallCloud.position.set(
+                    (Math.random() - 0.5) * 15 * scale,
+                    -1 + Math.random() * 2,
+                    (Math.random() - 0.5) * 15 * scale
+                );
+                smallCloud.scale.y = 0.5;
+                group.add(smallCloud);
+            }
+
+            group.position.set(x, y, z);
+            scene.add(group);
+            return group;
+        }
+
+        // 创建主殿 (ZONE 2 - 可观测性平台)
+        function createMainHall() {
+            const group = new THREE.Group();
+
+            // 底座
+            const base = new THREE.Mesh(
+                new THREE.CylinderGeometry(12, 14, 2, 8),
+                jadeMaterial
+            );
+            base.position.y = 1;
+            base.receiveShadow = true;
+            group.add(base);
+
+            // 主殿建筑
+            const hall = new THREE.Mesh(
+                new THREE.BoxGeometry(16, 10, 12),
+                jadeMaterial
+            );
+            hall.position.y = 7;
+            hall.castShadow = true;
+            group.add(hall);
+
+            // 屋顶
+            const roof = new THREE.Mesh(
+                new THREE.ConeGeometry(12, 6, 4),
+                roofMaterial
+            );
+            roof.position.y = 15;
+            roof.rotation.y = Math.PI / 4;
+            group.add(roof);
+
+            // 柱子
+            for (let i = 0; i < 4; i++) {
+                const pillar = new THREE.Mesh(
+                    new THREE.CylinderGeometry(0.5, 0.5, 10, 8),
+                    goldMaterial
+                );
+                const angle = (i / 4) * Math.PI * 2;
+                pillar.position.set(Math.cos(angle) * 6, 7, Math.sin(angle) * 4);
+                group.add(pillar);
+            }
+
+            // 中央水晶球 (浑天仪)
+            const sphereGroup = new THREE.Group();
+            
+            const crystal = new THREE.Mesh(
+                new THREE.SphereGeometry(2.5, 32, 32),
+                crystalMaterial
+            );
+            sphereGroup.add(crystal);
+
+            // 环绕环
+            const ring1 = new THREE.Mesh(
+                new THREE.TorusGeometry(4, 0.1, 8, 32),
+                goldMaterial
+            );
+            ring1.rotation.x = Math.PI / 2;
+            sphereGroup.add(ring1);
+
+            const ring2 = new THREE.Mesh(
+                new THREE.TorusGeometry(5, 0.1, 8, 32),
+                goldMaterial
+            );
+            ring2.rotation.y = Math.PI / 2;
+            sphereGroup.add(ring2);
+
+            sphereGroup.position.y = 5;
+            group.add(sphereGroup);
+
+            // 动画引用
+            group.userData = { crystal: sphereGroup };
+
+            return group;
+        }
+
+        // 创建高塔 (ZONE 3 和 ZONE 6)
+        function createTower(x, z, height = 25, hasBeam = false) {
+            const group = new THREE.Group();
+
+            // 塔身分段
+            const levels = 5;
+            for (let i = 0; i < levels; i++) {
+                const width = 6 - i * 0.8;
+                const level = new THREE.Mesh(
+                    new THREE.BoxGeometry(width, height / levels, width),
+                    jadeMaterial
+                );
+                level.position.y = (i + 0.5) * (height / levels) + 2;
+                level.castShadow = true;
+                group.add(level);
+
+                // 每层屋檐
+                const eave = new THREE.Mesh(
+                    new THREE.ConeGeometry(width * 0.8, 1.5, 4),
+                    roofMaterial
+                );
+                eave.position.y = (i + 1) * (height / levels) + 2;
+                eave.rotation.y = Math.PI / 4;
+                group.add(eave);
+            }
+
+            // 塔尖
+            const spire = new THREE.Mesh(
+                new THREE.ConeGeometry(1, 4, 4),
+                goldMaterial
+            );
+            spire.position.y = height + 4;
+            spire.rotation.y = Math.PI / 4;
+            group.add(spire);
+
+            // 光束效果 (ZONE 3)
+            if (hasBeam) {
+                const beamGeometry = new THREE.CylinderGeometry(0.5, 2, 40, 8, 1, true);
+                const beamMaterial = new THREE.MeshBasicMaterial({
+                    color: 0x00CED1,
+                    transparent: true,
+                    opacity: 0.3,
+                    side: THREE.DoubleSide,
+                    blending: THREE.AdditiveBlending
+                });
+                const beam = new THREE.Mesh(beamGeometry, beamMaterial);
+                beam.position.y = height + 20;
+                group.add(beam);
+                group.userData = { beam: beam };
+            }
+
+            group.position.set(x, 0, z);
+            return group;
+        }
+
+        // 创建流光传送带 (ZONE 4)
+        function createTaskConveyor() {
+            const group = new THREE.Group();
+            
+            // S形路径点
+            const curve = new THREE.CatmullRomCurve3([
+                new THREE.Vector3(-15, 2, 15),
+                new THREE.Vector3(-5, 2, 20),
+                new THREE.Vector3(5, 2, 15),
+                new THREE.Vector3(15, 2, 20)
+            ]);
+
+            // 传送带轨道
+            const tubeGeometry = new THREE.TubeGeometry(curve, 64, 1, 8, false);
+            const tubeMaterial = new THREE.MeshPhysicalMaterial({
+                color: 0x40E0D0,
+                metalness: 0.8,
+                roughness: 0.2,
+                transmission: 0.5,
+                emissive: 0x40E0D0,
+                emissiveIntensity: 0.2
+            });
+            const tube = new THREE.Mesh(tubeGeometry, tubeMaterial);
+            group.add(tube);
+
+            // 流动粒子
+            const particles = [];
+            for (let i = 0; i < 20; i++) {
+                const particle = new THREE.Mesh(
+                    new THREE.BoxGeometry(0.8, 0.8, 0.8),
+                    new THREE.MeshBasicMaterial({ color: 0xFFD700 })
+                );
+                const t = i / 20;
+                const pos = curve.getPoint(t);
+                particle.position.copy(pos);
+                particle.userData = { t: t, curve: curve };
+                group.add(particle);
+                particles.push(particle);
+            }
+
+            group.userData = { particles: particles };
+            return group;
+        }
+
+        // 创建牌坊入口 (ZONE 1)
+        function createEntrance() {
+            const group = new THREE.Group();
+
+            // 两根柱子
+            const leftPillar = new THREE.Mesh(
+                new THREE.CylinderGeometry(1, 1.2, 8, 8),
+                jadeMaterial
+            );
+            leftPillar.position.set(-6, 4, 0);
+            group.add(leftPillar);
+
+            const rightPillar = new THREE.Mesh(
+                new THREE.CylinderGeometry(1, 1.2, 8, 8),
+                jadeMaterial
+            );
+            rightPillar.position.set(6, 4, 0);
+            group.add(rightPillar);
+
+            // 横梁
+            const beam = new THREE.Mesh(
+                new THREE.BoxGeometry(16, 2, 2),
+                goldMaterial
+            );
+            beam.position.set(0, 8, 0);
+            group.add(beam);
+
+            // 屋顶
+            const roof = new THREE.Mesh(
+                new THREE.ConeGeometry(10, 3, 4),
+                roofMaterial
+            );
+            roof.position.set(0, 10.5, 0);
+            roof.rotation.y = Math.PI / 4;
+            roof.scale.z = 0.5;
+            group.add(roof);
+
+            // 石狮子 (简化版)
+            const createLion = (x) => {
+                const lion = new THREE.Group();
+                const body = new THREE.Mesh(
+                    new THREE.BoxGeometry(1.5, 2, 2),
+                    new THREE.MeshStandardMaterial({ color: 0x8B7355 })
+                );
+                body.position.y = 1;
+                lion.add(body);
+                
+                const head = new THREE.Mesh(
+                    new THREE.BoxGeometry(1.2, 1, 1.2),
+                    new THREE.MeshStandardMaterial({ color: 0x8B7355 })
+                );
+                head.position.set(0, 2.5, 0.5);
+                lion.add(head);
+                
+                lion.position.set(x, 0, 4);
+                return lion;
+            };
+
+            group.add(createLion(-8));
+            group.add(createLion(8));
+
+            group.position.set(0, 0, 30);
+            return group;
+        }
+
+        // 创建粒子系统 (仙气)
+        function createParticleSystem() {
+            const geometry = new THREE.BufferGeometry();
+            const count = 500;
+            const positions = new Float32Array(count * 3);
+            const speeds = [];
+
+            for (let i = 0; i < count; i++) {
+                positions[i * 3] = (Math.random() - 0.5) * 100;
+                positions[i * 3 + 1] = Math.random() * 50;
+                positions[i * 3 + 2] = (Math.random() - 0.5) * 100;
+                speeds.push(Math.random() * 0.02 + 0.01);
+            }
+
+            geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+
+            const material = new THREE.PointsMaterial({
+                color: 0xFFD700,
+                size: 0.5,
+                transparent: true,
+                opacity: 0.6,
+                blending: THREE.AdditiveBlending
+            });
+
+            const particles = new THREE.Points(geometry, material);
+            particles.userData = { speeds: speeds };
+            return particles;
+        }
+
+        // 构建场景
+        const cloudPlatform = createCloudPlatform(0, -5, 0, 3);
+        const mainHall = createMainHall();
+        const searchTower = createTower(-25, -10, 30, true);
+        const upgradeTower = createTower(25, -15, 25, false);
+        const taskConveyor = createTaskConveyor();
+        const entrance = createEntrance();
+        const particles = createParticleSystem();
+
+        scene.add(mainHall);
+        scene.add(searchTower);
+        scene.add(upgradeTower);
+        scene.add(taskConveyor);
+        scene.add(entrance);
+        scene.add(particles);
+
+        // 隐藏加载提示
+        document.getElementById('loading').style.display = 'none';
+
+        // 动画循环
+        const clock = new THREE.Clock();
+
+        function animate() {
+            requestAnimationFrame(animate);
+
+            const time = clock.getElapsedTime();
+
+            // 旋转水晶球
+            if (mainHall.userData.crystal) {
+                mainHall.userData.crystal.rotation.y = time * 0.5;
+                mainHall.userData.crystal.rotation.x = Math.sin(time * 0.3) * 0.2;
+            }
+
+            // 脉冲光束
+            if (searchTower.userData.beam) {
+                const scale = 1 + Math.sin(time * 2) * 0.2;
+                searchTower.userData.beam.scale.set(scale, 1, scale);
+                searchTower.userData.beam.material.opacity = 0.2 + Math.sin(time * 3) * 0.1;
+            }
+
+            // 流动任务粒子
+            if (taskConveyor.userData.particles) {
+                taskConveyor.userData.particles.forEach(particle => {
+                    particle.userData.t += 0.002;
+                    if (particle.userData.t > 1) particle.userData.t = 0;
+                    const pos = particle.userData.curve.getPoint(particle.userData.t);
+                    particle.position.copy(pos);
+                    particle.rotation.x += 0.02;
+                    particle.rotation.y += 0.02;
+                });
+            }
+
+            // 漂浮粒子
+            const positions = particles.geometry.attributes.position.array;
+            const speeds = particles.userData.speeds;
+            for (let i = 0; i < 500; i++) {
+                positions[i * 3 + 1] += speeds[i];
+                if (positions[i * 3 + 1] > 50) {
+                    positions[i * 3 + 1] = 0;
+                }
+            }
+            particles.geometry.attributes.position.needsUpdate = true;
+            particles.rotation.y = time * 0.05;
+
+            controls.update();
+            composer.render();
+        }
+
+        animate();
+
+        // 窗口大小调整
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            composer.setSize(window.innerWidth, window.innerHeight);
+        });
+
+        // 点击检测
+        const raycaster = new THREE.Raycaster();
+        const mouse = new THREE.Vector2();
+
+        window.addEventListener('click', (event) => {
+            mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
+            mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
+
+            raycaster.setFromCamera(mouse, camera);
+            const intersects = raycaster.intersectObjects(scene.children, true);
+
+            if (intersects.length > 0) {
+                console.log('点击了:', intersects[0].object.name || '建筑');
+            }
+        });
+    </script>
+</body>
+</html>
