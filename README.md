@@ -1,6 +1,6 @@
 # 云端天宫 CloudTower 3D
 
-🎮 **在线体验**: [https://cloudtower-3d.vercel.app](https://cloudtower-3d.vercel.app)
+🎮 **在线体验**: [https://0065paula.github.io/cloudtower-3d/](https://0065paula.github.io/cloudtower-3d/)
 
 中国传统天宫风格 + 现代云运维平台的 3D 可视化场景
 
